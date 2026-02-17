@@ -20,7 +20,7 @@ Before creating bug reports, please check existing issues to avoid duplicates. W
 
 - **Use a clear and descriptive title**
 - **Describe the exact steps to reproduce the problem**
-- **Provide specific examples** (code snippets, email formats that failed to parse, etc.)
+- **Provide specific examples** (code snippets, scenarios, etc.)
 - **Describe the behavior you observed and what you expected**
 - **Include screenshots** if applicable
 - **Include your environment details** (OS, Node.js version, Electron version)
@@ -34,14 +34,14 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 - **Explain why this enhancement would be useful**
 - **List any alternative solutions you've considered**
 
-### Adding Support for New Banks/Services
+### Adding Support for New Data Sources
 
-One of the most valuable contributions is adding support for parsing transaction emails from new banks or services. To do this:
+One of the most valuable contributions is adding support for parsing transactions from new sources. To do this:
 
-1. Collect sample email formats (anonymize sensitive data)
-2. Create regex patterns in `electron/lib/parser.ts`
+1. Identify the data format and structure
+2. Create parsing logic in the appropriate module
 3. Add test cases for the new patterns
-4. Submit a PR with documentation about which service is supported
+4. Submit a PR with documentation
 
 ### Pull Requests
 
@@ -95,11 +95,11 @@ npm run electron:dev
 
 Example:
 ```
-Add HDFC Bank credit card statement parser
+Add transaction categorization for retail purchases
 
-- Parse monthly credit card statements
-- Extract transaction date, merchant, amount
-- Categorize based on merchant name
+- Parse merchant names to identify category
+- Add mapping for common retailers
+- Implement fuzzy matching for variations
 
 Fixes #123
 ```
@@ -111,10 +111,7 @@ sanchay/
 ├── electron/              # Electron main process
 │   ├── main.ts           # Main process entry point
 │   ├── preload.ts        # Preload script (IPC bridge)
-│   └── lib/
-│       ├── gmail.ts      # Gmail API integration
-│       ├── database.ts   # SQLite database operations
-│       └── parser.ts     # Email parsing logic
+│   └── lib/              # Core modules
 ├── src/
 │   ├── app/              # Next.js app router pages
 │   ├── components/       # React components
@@ -134,6 +131,15 @@ npm run electron:dev
 # Build for production (to test production build)
 npm run electron:build
 ```
+
+## Privacy Considerations
+
+When contributing, please keep our core privacy principles in mind:
+
+- **Never add telemetry or analytics**
+- **Never add network calls that send user data**
+- **All data must remain on the user's device**
+- **Any new features must work offline**
 
 ## Questions?
 

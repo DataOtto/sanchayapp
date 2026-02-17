@@ -1,7 +1,7 @@
 {
   "name": "sanchay",
   "version": "1.0.0",
-  "description": "AI Financial Intelligence Layer - Your personal financial clarity engine powered by Gmail insights",
+  "description": "Privacy-first personal finance intelligence app - Your money, your data, your device",
   "author": "DataOtto",
   "license": "MIT",
   "homepage": "https://github.com/DataOtto/sanchayapp#readme",
@@ -17,13 +17,15 @@
     "personal-finance",
     "expense-tracker",
     "subscription-tracker",
-    "gmail",
+    "budget",
     "electron",
     "nextjs",
     "desktop-app",
     "privacy-first",
     "local-storage",
-    "financial-insights"
+    "financial-insights",
+    "money-management",
+    "offline-first"
   ],
   "main": "dist-electron/main.js",
   "scripts": {

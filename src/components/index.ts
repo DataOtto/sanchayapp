@@ -1,0 +1,10 @@
+export { Sidebar } from './Sidebar';
+export { Dashboard } from './Dashboard';
+export { SpendingChart } from './SpendingChart';
+export { CategoryBreakdown } from './CategoryBreakdown';
+export { RecentTransactions } from './RecentTransactions';
+export { Subscriptions } from './Subscriptions';
+export { Insights } from './Insights';
+export { Income } from './Income';
+export { Transactions } from './Transactions';
+export { Settings } from './Settings';

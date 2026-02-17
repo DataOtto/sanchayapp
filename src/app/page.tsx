@@ -1,63 +1,221 @@
-import Image from "next/image";
+'use client';
+
+import { useEffect, useState } from 'react';
+import {
+  Sidebar,
+  Dashboard,
+  Subscriptions,
+  Insights,
+  Income,
+  Transactions,
+  Settings,
+} from '@/components';
+import { useTheme, themes } from '@/lib/theme';
+import type { SyncProgress } from '@/types';
 
 export default function Home() {
+  const [currentView, setCurrentView] = useState('dashboard');
+  const [isElectron, setIsElectron] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | undefined>();
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const { theme } = useTheme();
+  const t = themes[theme];
+
+  useEffect(() => {
+    const electronAvailable = typeof window !== 'undefined' && window.electronAPI;
+    setIsElectron(!!electronAvailable);
+
+    if (electronAvailable) {
+      checkAuthStatus();
+      loadLastSync();
+
+      const unsubscribe = window.electronAPI.gmail.onSyncProgress((progress) => {
+        setSyncProgress(progress);
+      });
+
+      return () => unsubscribe();
+    }
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const result = await window.electronAPI.gmail.checkAuth();
+      setIsConnected(result.authenticated);
+    } catch (error) {
+      console.error('Failed to check auth status:', error);
+    }
+  };
+
+  const loadLastSync = async () => {
+    try {
+      const lastSyncTime = await window.electronAPI.gmail.getLastSync();
+      setLastSync(lastSyncTime || undefined);
+    } catch (error) {
+      console.error('Failed to load last sync:', error);
+    }
+  };
+
+  const handleConnect = async () => {
+    if (!isElectron) return;
+    try {
+      setIsSyncing(true);
+      const result = await window.electronAPI.gmail.authenticate();
+      if (result.success) {
+        setIsConnected(true);
+        handleSync();
+      }
+    } catch (error) {
+      console.error('Failed to connect:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!isElectron) return;
+    try {
+      await window.electronAPI.gmail.disconnect();
+      setIsConnected(false);
+    } catch (error) {
+      console.error('Failed to disconnect:', error);
+    }
+  };
+
+  const handleSync = async () => {
+    if (!isElectron || !isConnected) return;
+    try {
+      setIsSyncing(true);
+      setSyncProgress(null);
+      const result = await window.electronAPI.gmail.syncEmails();
+      if (result.success) {
+        setLastSync(new Date().toISOString());
+      }
+    } catch (error) {
+      console.error('Sync failed:', error);
+    } finally {
+      setIsSyncing(false);
+      setSyncProgress(null);
+    }
+  };
+
+  const renderView = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return <Dashboard isElectron={isElectron} />;
+      case 'transactions':
+        return <Transactions isElectron={isElectron} />;
+      case 'subscriptions':
+        return <Subscriptions isElectron={isElectron} />;
+      case 'income':
+        return <Income isElectron={isElectron} />;
+      case 'insights':
+        return <Insights isElectron={isElectron} />;
+      case 'settings':
+        return (
+          <Settings
+            isElectron={isElectron}
+            isConnected={isConnected}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            isSyncing={isSyncing}
+            lastSync={lastSync}
+          />
+        );
+      default:
+        return <Dashboard isElectron={isElectron} />;
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div
+      className="flex h-screen overflow-hidden transition-colors duration-500 relative"
+      style={{ background: t.bg }}
+    >
+      {/* Ambient background effects */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {/* Top gradient orb - purple/blue */}
+        <div
+          className="absolute -top-[40%] -right-[20%] w-[80%] h-[80%] rounded-full opacity-30"
+          style={{
+            background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
+            filter: 'blur(80px)',
+          }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        {/* Bottom gradient orb - emerald */}
+        <div
+          className="absolute -bottom-[30%] -left-[20%] w-[60%] h-[60%] rounded-full opacity-20"
+          style={{
+            background: 'radial-gradient(circle, rgba(16, 185, 129, 0.2) 0%, transparent 70%)',
+            filter: 'blur(80px)',
+          }}
+        />
+        {/* Subtle grid pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.02]"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)
+            `,
+            backgroundSize: '50px 50px',
+          }}
+        />
+      </div>
+
+      {/* Sidebar */}
+      <Sidebar
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        isConnected={isConnected}
+        isSyncing={isSyncing}
+        onSync={isConnected ? handleSync : handleConnect}
+        lastSync={lastSync}
+      />
+
+      {/* Main content */}
+      <main className="flex-1 flex flex-col overflow-hidden relative z-10">
+        {/* Top drag region */}
+        <div className="h-[52px] shrink-0 drag-region" />
+
+        {/* Sync Progress */}
+        {isSyncing && syncProgress && (
+          <div
+            className="px-6 py-3 shrink-0 backdrop-blur-xl"
+            style={{
+              background: 'linear-gradient(90deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%)',
+              borderBottom: '1px solid rgba(16, 185, 129, 0.2)',
+            }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <div className="flex items-center justify-between text-sm">
+              <span style={{ color: t.accentLight }} className="font-medium flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Syncing emails... {syncProgress.processed}/{syncProgress.total}
+              </span>
+              <span style={{ color: t.textMuted }}>
+                {syncProgress.newTransactions} new transactions
+              </span>
+            </div>
+            <div
+              className="h-1 rounded-full mt-2 overflow-hidden"
+              style={{ background: 'rgba(16, 185, 129, 0.1)' }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${(syncProgress.processed / syncProgress.total) * 100}%`,
+                  background: 'linear-gradient(90deg, #10b981, #34d399)',
+                  boxShadow: '0 0 20px rgba(16, 185, 129, 0.5)',
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Content */}
+        <div className="flex-1 overflow-hidden">
+          {renderView()}
         </div>
       </main>
     </div>

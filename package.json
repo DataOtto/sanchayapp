@@ -1,26 +1,114 @@
 {
   "name": "sanchay",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "AI Financial Intelligence Layer - Your personal financial clarity engine powered by Gmail insights",
+  "author": "DataOtto",
+  "license": "MIT",
+  "homepage": "https://github.com/DataOtto/sanchayapp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DataOtto/sanchayapp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DataOtto/sanchayapp/issues"
+  },
+  "keywords": [
+    "finance",
+    "personal-finance",
+    "expense-tracker",
+    "subscription-tracker",
+    "gmail",
+    "electron",
+    "nextjs",
+    "desktop-app",
+    "privacy-first",
+    "local-storage",
+    "financial-insights"
+  ],
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && npm run electron:start\"",
+    "electron:start": "electron .",
+    "electron:build": "npm run build && npm run electron:compile && electron-builder",
+    "electron:compile": "tsc -p electron/tsconfig.json",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "date-fns": "^4.1.0",
+    "electron-store": "^11.0.2",
+    "google-auth-library": "^10.5.0",
+    "googleapis": "^171.4.0",
+    "lucide-react": "^0.574.0",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "recharts": "^3.7.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "electron": "^40.4.1",
+    "electron-builder": "^26.7.0",
+    "electron-rebuild": "^3.2.9",
+    "electron-serve": "^3.0.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.0.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "build": {
+    "appId": "com.sanchay.app",
+    "productName": "Sanchay",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "out/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "public/icon.icns",
+      "category": "public.app-category.finance"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "public/icon.png",
+      "category": "Finance"
+    },
+    "extraResources": [
+      {
+        "from": "node_modules/better-sqlite3/build/Release",
+        "to": "better-sqlite3",
+        "filter": [
+          "*.node"
+        ]
+      }
+    ]
   }
 }

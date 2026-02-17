@@ -39,3 +39,30 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# electron
+/dist-electron
+/release
+
+# database
+*.db
+*.db-journal
+*.db-wal
+
+# Google OAuth credentials (NEVER commit these)
+credentials.json
+token.json
+*.tokens.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+
+# Logs
+logs/
+*.log

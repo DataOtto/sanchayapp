@@ -3,7 +3,16 @@ import path from 'path';
 import serve from 'electron-serve';
 import { initDatabase, getDatabase } from './database';
 import { setupGmailHandlers } from './gmail';
-import { getOpenAIKey, setOpenAIKey, clearOpenAIKey } from './aiParser';
+import {
+  getAIConfig,
+  setAIConfig,
+  clearAIConfig,
+  checkAIStatus,
+  getMaskedApiKey,
+  PROVIDER_INFO,
+  AIProviderType,
+} from './ai';
+import { getLogs, clearLogs, logger } from './logger';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -30,10 +39,12 @@ async function createWindow() {
 
   // Initialize database
   initDatabase();
+  logger.info('App', 'Database initialized');
 
   // Setup IPC handlers
   setupIpcHandlers();
   setupGmailHandlers();
+  logger.success('App', 'Sanchay started successfully');
 
   if (isProd) {
     await mainWindow.loadURL('app://./');
@@ -210,24 +221,41 @@ function setupIpcHandlers() {
     return stmt.run(emailId, new Date().toISOString());
   });
 
-  // OpenAI API key handlers
-  ipcMain.handle('ai:getApiKey', async () => {
-    const key = getOpenAIKey();
-    return key ? '••••••••' + key.slice(-4) : null;
+  // AI provider handlers
+  ipcMain.handle('ai:getConfig', async () => {
+    return getAIConfig();
   });
 
-  ipcMain.handle('ai:setApiKey', async (_, key) => {
-    setOpenAIKey(key);
+  ipcMain.handle('ai:setConfig', async (_, config) => {
+    setAIConfig(config);
     return { success: true };
   });
 
-  ipcMain.handle('ai:clearApiKey', async () => {
-    clearOpenAIKey();
+  ipcMain.handle('ai:clearConfig', async () => {
+    clearAIConfig();
     return { success: true };
   });
 
-  ipcMain.handle('ai:hasApiKey', async () => {
-    return !!getOpenAIKey();
+  ipcMain.handle('ai:checkStatus', async (_, type?: AIProviderType) => {
+    return checkAIStatus(type);
+  });
+
+  ipcMain.handle('ai:getMaskedKey', async (_, type: AIProviderType) => {
+    return getMaskedApiKey(type);
+  });
+
+  ipcMain.handle('ai:getProviders', async () => {
+    return PROVIDER_INFO;
+  });
+
+  // Logger handlers
+  ipcMain.handle('log:getAll', async () => {
+    return getLogs();
+  });
+
+  ipcMain.handle('log:clear', async () => {
+    clearLogs();
+    return { success: true };
   });
 }
 

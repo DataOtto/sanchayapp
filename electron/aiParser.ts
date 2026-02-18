@@ -1,10 +1,12 @@
-import OpenAI from 'openai';
 import crypto from 'crypto';
 import { gmail_v1 } from 'googleapis';
 import Store from 'electron-store';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const store = new Store() as any;
+
+const OLLAMA_DEFAULT_URL = 'http://localhost:11434';
+const OLLAMA_DEFAULT_MODEL = 'llama3.2';
 
 export interface ParsedTransaction {
   id: string;
@@ -51,6 +53,12 @@ export interface AIParseResult {
 export interface ParsedEmail {
   transactions: ParsedTransaction[];
   subscription?: ParsedSubscription;
+}
+
+export interface OllamaConfig {
+  enabled: boolean;
+  url: string;
+  model: string;
 }
 
 const CATEGORIES = [
@@ -116,7 +124,7 @@ function extractEmailBody(message: gmail_v1.Schema$Message): string {
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Limit body length for API efficiency
+  // Limit body length for efficiency
   return body.substring(0, 3000);
 }
 
@@ -127,16 +135,41 @@ function getHeader(message: gmail_v1.Schema$Message, name: string): string {
   return header?.value || '';
 }
 
-export function getOpenAIKey(): string | null {
-  return store.get('openai_api_key') as string | null;
+// Ollama configuration functions
+export function getOllamaConfig(): OllamaConfig {
+  return {
+    enabled: store.get('ollama_enabled', false) as boolean,
+    url: store.get('ollama_url', OLLAMA_DEFAULT_URL) as string,
+    model: store.get('ollama_model', OLLAMA_DEFAULT_MODEL) as string,
+  };
 }
 
-export function setOpenAIKey(key: string): void {
-  store.set('openai_api_key', key);
+export function setOllamaConfig(config: Partial<OllamaConfig>): void {
+  if (config.enabled !== undefined) store.set('ollama_enabled', config.enabled);
+  if (config.url) store.set('ollama_url', config.url);
+  if (config.model) store.set('ollama_model', config.model);
 }
 
-export function clearOpenAIKey(): void {
-  store.delete('openai_api_key');
+export function clearOllamaConfig(): void {
+  store.delete('ollama_enabled');
+  store.delete('ollama_url');
+  store.delete('ollama_model');
+}
+
+// Check if Ollama is running and accessible
+export async function checkOllamaStatus(): Promise<{ running: boolean; models: string[] }> {
+  const config = getOllamaConfig();
+  try {
+    const response = await fetch(`${config.url}/api/tags`);
+    if (!response.ok) {
+      return { running: false, models: [] };
+    }
+    const data = await response.json() as { models?: Array<{ name: string }> };
+    const models = data.models?.map((m) => m.name) || [];
+    return { running: true, models };
+  } catch {
+    return { running: false, models: [] };
+  }
 }
 
 export async function parseEmailWithAI(
@@ -146,9 +179,9 @@ export async function parseEmailWithAI(
     transactions: [],
   };
 
-  const apiKey = getOpenAIKey();
-  if (!apiKey) {
-    console.log('No OpenAI API key configured, skipping AI parsing');
+  const config = getOllamaConfig();
+  if (!config.enabled) {
+    console.log('Ollama is not enabled, skipping AI parsing');
     return result;
   }
 
@@ -164,8 +197,6 @@ export async function parseEmailWithAI(
     return result;
   }
 
-  const openai = new OpenAI({ apiKey });
-
   const prompt = `Analyze this email and determine if it contains financial transaction information.
 
 FROM: ${from}
@@ -175,7 +206,7 @@ BODY: ${body}
 If this email contains a financial transaction (bank alert, payment confirmation, receipt, invoice, subscription charge, salary credit, refund, etc.), extract the following information in JSON format:
 
 {
-  "isFinancial": true/false,
+  "isFinancial": true,
   "transaction": {
     "amount": <number>,
     "currency": "<USD/EUR/GBP/INR/etc>",
@@ -191,7 +222,7 @@ If this email contains a financial transaction (bank alert, payment confirmation
     "currency": "<currency code>",
     "billingCycle": "<monthly/yearly/weekly/quarterly>",
     "category": "<category>"
-  } // only include if this is a recurring subscription
+  }
 }
 
 If this is NOT a financial email (newsletters, promotions, social media, etc.), return:
@@ -201,27 +232,42 @@ Important:
 - income includes: salary, freelance payments, refunds, cashback, dividends, interest
 - expense includes: purchases, bills, subscriptions, fees
 - transfer includes: money transfers between accounts
-- Only return valid JSON, no explanations`;
+- Only return valid JSON, no explanations or additional text`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a financial email parser. Extract transaction details from emails accurately. Always respond with valid JSON only.',
+    const response = await fetch(`${config.url}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a financial email parser. Extract transaction details from emails accurately. Always respond with valid JSON only, no explanations.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        stream: false,
+        options: {
+          temperature: 0.1,
         },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.1,
-      max_tokens: 500,
+      }),
     });
 
-    const content = response.choices[0]?.message?.content?.trim();
+    if (!response.ok) {
+      console.error('Ollama API error:', response.status, response.statusText);
+      return result;
+    }
+
+    const data = await response.json() as { message?: { content?: string } };
+    const content = data.message?.content?.trim();
+
     if (!content) {
       return result;
     }
@@ -231,7 +277,13 @@ Important:
     try {
       // Handle potential markdown code blocks
       const jsonContent = content.replace(/```json\n?|\n?```/g, '').trim();
-      parsed = JSON.parse(jsonContent);
+      // Find the JSON object in the response
+      const jsonMatch = jsonContent.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error('No JSON found in response:', content);
+        return result;
+      }
+      parsed = JSON.parse(jsonMatch[0]);
     } catch {
       console.error('Failed to parse AI response:', content);
       return result;
@@ -300,9 +352,9 @@ export async function parseEmailsWithAI(
       onProgress(i + 1, total);
     }
 
-    // Small delay to avoid rate limiting
+    // Small delay between requests
     if (i < messages.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
 

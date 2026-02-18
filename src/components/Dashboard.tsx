@@ -15,7 +15,7 @@ import { SpendingChart } from './SpendingChart';
 import { CategoryBreakdown } from './CategoryBreakdown';
 import { RecentTransactions } from './RecentTransactions';
 import { useTheme, themes } from '@/lib/theme';
-import type { Transaction, CategorySpending, BalanceSummary } from '@/types';
+import type { Transaction, CategorySpending, BalanceSummary, Subscription } from '@/types';
 
 interface DashboardProps {
   isElectron: boolean;
@@ -25,6 +25,7 @@ export function Dashboard({ isElectron }: DashboardProps) {
   const [balance, setBalance] = useState<BalanceSummary | null>(null);
   const [spending, setSpending] = useState<CategorySpending[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const { theme } = useTheme();
   const t = themes[theme];
@@ -33,7 +34,7 @@ export function Dashboard({ isElectron }: DashboardProps) {
     if (isElectron && window.electronAPI) {
       loadData();
     } else {
-      loadMockData();
+      setLoading(false);
     }
   }, [isElectron]);
 
@@ -44,40 +45,26 @@ export function Dashboard({ isElectron }: DashboardProps) {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-      const [balanceData, spendingData, transactions] = await Promise.all([
+      const [balanceData, spendingData, transactions, subs] = await Promise.all([
         window.electronAPI.db.getTotalBalance(),
         window.electronAPI.db.getSpendingByCategory({ startDate: startOfMonth, endDate: endOfMonth }),
         window.electronAPI.db.getTransactions({ limit: 10 }),
+        window.electronAPI.db.getSubscriptions(),
       ]);
 
-      setBalance(balanceData);
-      setSpending(spendingData);
-      setRecentTransactions(transactions);
+      setBalance(balanceData || { total_income: 0, total_expense: 0 });
+      setSpending(spendingData || []);
+      setRecentTransactions(transactions || []);
+      setSubscriptions(subs || []);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
+      setBalance({ total_income: 0, total_expense: 0 });
+      setSpending([]);
+      setRecentTransactions([]);
+      setSubscriptions([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadMockData = () => {
-    setBalance({ total_income: 125000, total_expense: 78500 });
-    setSpending([
-      { category: 'Food', total: 18500 },
-      { category: 'Shopping', total: 25000 },
-      { category: 'Transport', total: 8000 },
-      { category: 'Entertainment', total: 5500 },
-      { category: 'Bills', total: 12000 },
-      { category: 'Investment', total: 9500 },
-    ]);
-    setRecentTransactions([
-      { id: '1', date: '2024-01-15', amount: 649, description: 'Netflix Subscription', category: 'Entertainment', type: 'debit', source: 'HDFC' },
-      { id: '2', date: '2024-01-14', amount: 1250, description: 'Swiggy Order', category: 'Food', type: 'debit', source: 'ICICI' },
-      { id: '3', date: '2024-01-14', amount: 100000, description: 'Salary Credited', category: 'Salary', type: 'credit', source: 'HDFC' },
-      { id: '4', date: '2024-01-13', amount: 3500, description: 'Amazon Purchase', category: 'Shopping', type: 'debit', source: 'Axis' },
-      { id: '5', date: '2024-01-12', amount: 500, description: 'Uber Ride', category: 'Transport', type: 'debit', source: 'Paytm' },
-    ]);
-    setLoading(false);
   };
 
   const formatCurrency = (amount: number) => {
@@ -92,6 +79,17 @@ export function Dashboard({ isElectron }: DashboardProps) {
   const totalIncome = balance?.total_income || 0;
   const netSavings = totalIncome - totalExpense;
   const savingsRate = totalIncome > 0 ? ((netSavings / totalIncome) * 100).toFixed(1) : '0';
+
+  // Calculate subscription totals
+  const activeSubscriptions = subscriptions.filter((s) => s.status === 'active');
+  const monthlySubTotal = activeSubscriptions.reduce((sum, s) => {
+    let monthly = s.amount;
+    if (s.billing_cycle === 'yearly') monthly = s.amount / 12;
+    if (s.billing_cycle === 'quarterly') monthly = s.amount / 3;
+    if (s.billing_cycle === 'weekly') monthly = s.amount * 4;
+    if (s.currency === 'USD') monthly *= 83;
+    return sum + monthly;
+  }, 0);
 
   if (loading) {
     return (
@@ -161,10 +159,10 @@ export function Dashboard({ isElectron }: DashboardProps) {
           />
           <SummaryCard
             title="Subscriptions"
-            value="₹4,500"
+            value={formatCurrency(Math.round(monthlySubTotal))}
             subtitle="/month"
             icon={<CreditCard size={20} />}
-            trend="8 active"
+            trend={`${activeSubscriptions.length} active`}
             color="purple"
             theme={theme}
           />

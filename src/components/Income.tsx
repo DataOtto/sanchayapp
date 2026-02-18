@@ -51,7 +51,7 @@ export function Income({ isElectron }: IncomeProps) {
     if (isElectron && window.electronAPI) {
       loadData();
     } else {
-      loadMockData();
+      setLoading(false);
     }
   }, [isElectron]);
 
@@ -67,45 +67,15 @@ export function Income({ isElectron }: IncomeProps) {
         window.electronAPI.db.getTransactions({ type: 'credit', limit: 20 }),
       ]);
 
-      setIncomeData(income);
-      setRecentIncome(transactions);
+      setIncomeData(income || []);
+      setRecentIncome(transactions || []);
     } catch (error) {
       console.error('Failed to load income data:', error);
-      loadMockData();
+      setIncomeData([]);
+      setRecentIncome([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadMockData = () => {
-    setIncomeData([
-      { category: 'Salary', total: 150000 },
-      { category: 'Freelance', total: 35000 },
-      { category: 'Investment', total: 12000 },
-      { category: 'Refund', total: 5500 },
-      { category: 'Cashback', total: 2500 },
-      { category: 'Interest', total: 1800 },
-    ]);
-
-    setRecentIncome([
-      { id: '1', date: '2024-01-15', amount: 150000, description: 'Salary Credited - January', category: 'Salary', type: 'credit', source: 'HDFC' },
-      { id: '2', date: '2024-01-10', amount: 25000, description: 'Freelance Project - UI Design', category: 'Freelance', type: 'credit', source: 'Razorpay' },
-      { id: '3', date: '2024-01-08', amount: 8000, description: 'Dividend - HDFC Bank', category: 'Investment', type: 'credit', source: 'Zerodha' },
-      { id: '4', date: '2024-01-05', amount: 3500, description: 'Amazon Refund', category: 'Refund', type: 'credit', source: 'Amazon' },
-      { id: '5', date: '2024-01-03', amount: 1200, description: 'Credit Card Cashback', category: 'Cashback', type: 'credit', source: 'ICICI' },
-      { id: '6', date: '2024-01-02', amount: 850, description: 'Savings Account Interest', category: 'Interest', type: 'credit', source: 'HDFC' },
-    ]);
-
-    setMonthlyIncome([
-      { month: 'Aug', amount: 165000 },
-      { month: 'Sep', amount: 172000 },
-      { month: 'Oct', amount: 158000 },
-      { month: 'Nov', amount: 195000 },
-      { month: 'Dec', amount: 210000 },
-      { month: 'Jan', amount: 206800 },
-    ]);
-
-    setLoading(false);
   };
 
   const formatCurrency = (amount: number) => {
@@ -149,6 +119,20 @@ export function Income({ isElectron }: IncomeProps) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="animate-pulse" style={{ color: t.textMuted }}>Loading income data...</div>
+      </div>
+    );
+  }
+
+  if (incomeData.length === 0 && recentIncome.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="text-center">
+          <TrendingUp size={48} className="mx-auto mb-4 opacity-50" style={{ color: t.textMuted }} />
+          <p className="text-lg font-medium" style={{ color: t.text }}>No income data yet</p>
+          <p className="text-sm mt-1" style={{ color: t.textMuted }}>
+            Connect Gmail in Settings to sync your financial emails
+          </p>
+        </div>
       </div>
     );
   }

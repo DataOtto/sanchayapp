@@ -10,6 +10,8 @@ import {
   Transactions,
   Settings,
   Onboarding,
+  Tutorials,
+  Verbose,
 } from '@/components';
 import { useTheme, themes } from '@/lib/theme';
 import type { SyncProgress } from '@/types';
@@ -37,6 +39,12 @@ export default function Home() {
     }
     setIsLoading(false);
 
+    // Handle navigation events from child components
+    const handleNavigate = (e: CustomEvent) => {
+      setCurrentView(e.detail);
+    };
+    window.addEventListener('navigate', handleNavigate as EventListener);
+
     if (electronAvailable) {
       checkAuthStatus();
       loadLastSync();
@@ -45,8 +53,15 @@ export default function Home() {
         setSyncProgress(progress);
       });
 
-      return () => unsubscribe();
+      return () => {
+        unsubscribe();
+        window.removeEventListener('navigate', handleNavigate as EventListener);
+      };
     }
+
+    return () => {
+      window.removeEventListener('navigate', handleNavigate as EventListener);
+    };
   }, []);
 
   const handleOnboardingComplete = () => {
@@ -127,6 +142,10 @@ export default function Home() {
         return <Income isElectron={isElectron} />;
       case 'insights':
         return <Insights isElectron={isElectron} />;
+      case 'tutorials':
+        return <Tutorials isElectron={isElectron} />;
+      case 'verbose':
+        return <Verbose isElectron={isElectron} />;
       case 'settings':
         return (
           <Settings
@@ -249,7 +268,7 @@ export default function Home() {
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
           {renderView()}
         </div>
       </main>

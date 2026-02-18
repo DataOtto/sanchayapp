@@ -31,6 +31,10 @@ export function initDatabase(): Database.Database {
       email_id TEXT,
       merchant TEXT,
       raw_data TEXT,
+      reversed_by TEXT,
+      reverses TEXT,
+      is_duplicate INTEGER DEFAULT 0,
+      hash TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -84,7 +88,30 @@ export function initDatabase(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_processed_emails_id ON processed_emails(email_id);
   `);
 
+  // Run migrations for existing databases
+  runMigrations(db);
+
   return db;
+}
+
+function runMigrations(database: Database.Database): void {
+  // Check if columns exist and add them if not
+  const tableInfo = database.prepare("PRAGMA table_info(transactions)").all() as { name: string }[];
+  const columns = tableInfo.map(col => col.name);
+
+  if (!columns.includes('reversed_by')) {
+    database.exec('ALTER TABLE transactions ADD COLUMN reversed_by TEXT');
+  }
+  if (!columns.includes('reverses')) {
+    database.exec('ALTER TABLE transactions ADD COLUMN reverses TEXT');
+  }
+  if (!columns.includes('is_duplicate')) {
+    database.exec('ALTER TABLE transactions ADD COLUMN is_duplicate INTEGER DEFAULT 0');
+  }
+  if (!columns.includes('hash')) {
+    database.exec('ALTER TABLE transactions ADD COLUMN hash TEXT');
+    database.exec('CREATE INDEX IF NOT EXISTS idx_transactions_hash ON transactions(hash)');
+  }
 }
 
 export function getDatabase(): Database.Database {

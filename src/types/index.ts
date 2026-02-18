@@ -9,6 +9,9 @@ export interface Transaction {
   email_id?: string;
   merchant?: string;
   raw_data?: string;
+  reversed_by?: string;
+  reverses?: string;
+  is_duplicate?: number;
   created_at?: string;
 }
 
@@ -59,6 +62,52 @@ export interface SyncProgress {
   newTransactions: number;
 }
 
+// AI Provider types
+export type AIProviderType = 'ollama' | 'openai' | 'gemini' | 'openrouter';
+
+export interface AIProviderConfig {
+  type: AIProviderType;
+  enabled: boolean;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}
+
+export interface AIProviderStatus {
+  available: boolean;
+  models?: string[];
+  error?: string;
+}
+
+export interface AIProviderInfo {
+  name: string;
+  description: string;
+  requiresKey: boolean;
+}
+
+// Google credentials types
+export interface GoogleCredentials {
+  clientId: string;
+  clientSecret: string;
+}
+
+export interface MaskedGoogleCredentials {
+  clientId: string | null;
+  clientSecret: string | null;
+}
+
+// Log types
+export type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'debug';
+
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: LogLevel;
+  category: string;
+  message: string;
+  data?: any;
+}
+
 // Electron API types
 export interface ElectronAPI {
   db: {
@@ -76,8 +125,14 @@ export interface ElectronAPI {
     isEmailProcessed: (emailId: string) => Promise<boolean>;
     markEmailProcessed: (emailId: string) => Promise<void>;
   };
+  google: {
+    getCredentials: () => Promise<MaskedGoogleCredentials>;
+    setCredentials: (credentials: GoogleCredentials) => Promise<{ success: boolean }>;
+    clearCredentials: () => Promise<{ success: boolean }>;
+    hasCredentials: () => Promise<boolean>;
+  };
   gmail: {
-    checkAuth: () => Promise<{ authenticated: boolean }>;
+    checkAuth: () => Promise<{ authenticated: boolean; error?: string }>;
     authenticate: () => Promise<{ success: boolean; error?: string }>;
     disconnect: () => Promise<{ success: boolean; error?: string }>;
     syncEmails: (options?: { fullSync?: boolean }) => Promise<{ success: boolean; processedCount?: number; newTransactions?: number; error?: string }>;
@@ -85,10 +140,17 @@ export interface ElectronAPI {
     onSyncProgress: (callback: (data: SyncProgress) => void) => () => void;
   };
   ai: {
-    getApiKey: () => Promise<string | null>;
-    setApiKey: (key: string) => Promise<{ success: boolean }>;
-    clearApiKey: () => Promise<{ success: boolean }>;
-    hasApiKey: () => Promise<boolean>;
+    getConfig: () => Promise<AIProviderConfig>;
+    setConfig: (config: Partial<AIProviderConfig>) => Promise<{ success: boolean }>;
+    clearConfig: () => Promise<{ success: boolean }>;
+    checkStatus: (type?: AIProviderType) => Promise<AIProviderStatus>;
+    getMaskedKey: (type: AIProviderType) => Promise<string | null>;
+    getProviders: () => Promise<Record<AIProviderType, AIProviderInfo>>;
+  };
+  logs: {
+    getAll: () => Promise<LogEntry[]>;
+    clear: () => Promise<{ success: boolean }>;
+    onNewLog: (callback: (entry: LogEntry) => void) => () => void;
   };
 }
 

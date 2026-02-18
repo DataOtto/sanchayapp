@@ -54,7 +54,7 @@ export function Subscriptions({ isElectron }: SubscriptionsProps) {
     if (isElectron && window.electronAPI) {
       loadData();
     } else {
-      loadMockData();
+      setLoading(false);
     }
   }, [isElectron]);
 
@@ -62,98 +62,13 @@ export function Subscriptions({ isElectron }: SubscriptionsProps) {
     try {
       setLoading(true);
       const data = await window.electronAPI.db.getSubscriptions();
-      setSubscriptions(data);
+      setSubscriptions(data || []);
     } catch (error) {
       console.error('Failed to load subscriptions:', error);
+      setSubscriptions([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadMockData = () => {
-    setSubscriptions([
-      {
-        id: '1',
-        name: 'Netflix',
-        amount: 649,
-        currency: 'INR',
-        billing_cycle: 'monthly',
-        next_billing_date: '2024-02-01',
-        category: 'Entertainment',
-        status: 'active',
-      },
-      {
-        id: '2',
-        name: 'ChatGPT Plus',
-        amount: 20,
-        currency: 'USD',
-        billing_cycle: 'monthly',
-        next_billing_date: '2024-01-25',
-        category: 'Productivity',
-        status: 'active',
-      },
-      {
-        id: '3',
-        name: 'Spotify',
-        amount: 119,
-        currency: 'INR',
-        billing_cycle: 'monthly',
-        next_billing_date: '2024-02-05',
-        category: 'Entertainment',
-        status: 'active',
-      },
-      {
-        id: '4',
-        name: 'AWS',
-        amount: 45,
-        currency: 'USD',
-        billing_cycle: 'monthly',
-        next_billing_date: '2024-02-01',
-        category: 'Cloud Services',
-        status: 'active',
-      },
-      {
-        id: '5',
-        name: 'Amazon Prime',
-        amount: 1499,
-        currency: 'INR',
-        billing_cycle: 'yearly',
-        next_billing_date: '2024-06-15',
-        category: 'Shopping',
-        status: 'active',
-      },
-      {
-        id: '6',
-        name: 'GitHub',
-        amount: 4,
-        currency: 'USD',
-        billing_cycle: 'monthly',
-        next_billing_date: '2024-02-10',
-        category: 'Development',
-        status: 'active',
-      },
-      {
-        id: '7',
-        name: 'Notion',
-        amount: 10,
-        currency: 'USD',
-        billing_cycle: 'monthly',
-        next_billing_date: '2024-02-08',
-        category: 'Productivity',
-        status: 'paused',
-      },
-      {
-        id: '8',
-        name: 'Figma',
-        amount: 15,
-        currency: 'USD',
-        billing_cycle: 'monthly',
-        next_billing_date: '2024-02-12',
-        category: 'Design',
-        status: 'active',
-      },
-    ]);
-    setLoading(false);
   };
 
   const formatCurrency = (amount: number, currency: string) => {

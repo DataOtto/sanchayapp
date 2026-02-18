@@ -28,7 +28,8 @@ export function SpendingChart({ isElectron }: SpendingChartProps) {
     if (isElectron && window.electronAPI) {
       loadData();
     } else {
-      loadMockData();
+      // Show empty chart for all months
+      setData(monthNames.map((name) => ({ month: name, amount: 0 })));
     }
   }, [isElectron]);
 
@@ -39,7 +40,7 @@ export function SpendingChart({ isElectron }: SpendingChartProps) {
 
       const chartData = monthNames.map((name, index) => {
         const monthNum = String(index + 1).padStart(2, '0');
-        const found = monthlyData.find((m: MonthlySpending) => m.month === monthNum);
+        const found = monthlyData?.find((m: MonthlySpending) => m.month === monthNum);
         return {
           month: name,
           amount: found?.total || 0,
@@ -49,25 +50,8 @@ export function SpendingChart({ isElectron }: SpendingChartProps) {
       setData(chartData);
     } catch (error) {
       console.error('Failed to load spending data:', error);
-      loadMockData();
+      setData(monthNames.map((name) => ({ month: name, amount: 0 })));
     }
-  };
-
-  const loadMockData = () => {
-    setData([
-      { month: 'Jan', amount: 45000 },
-      { month: 'Feb', amount: 52000 },
-      { month: 'Mar', amount: 48000 },
-      { month: 'Apr', amount: 61000 },
-      { month: 'May', amount: 55000 },
-      { month: 'Jun', amount: 67000 },
-      { month: 'Jul', amount: 72000 },
-      { month: 'Aug', amount: 58000 },
-      { month: 'Sep', amount: 63000 },
-      { month: 'Oct', amount: 71000 },
-      { month: 'Nov', amount: 69000 },
-      { month: 'Dec', amount: 78500 },
-    ]);
   };
 
   const formatCurrency = (value: number) => {

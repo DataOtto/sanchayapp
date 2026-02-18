@@ -14,6 +14,8 @@ import {
   Sun,
   Moon,
   Sparkles,
+  BookOpen,
+  Terminal,
 } from 'lucide-react';
 import { useTheme, themes } from '@/lib/theme';
 
@@ -32,6 +34,8 @@ const navItems = [
   { id: 'subscriptions', label: 'Subscriptions', icon: RefreshCw },
   { id: 'income', label: 'Income', icon: TrendingUp },
   { id: 'insights', label: 'Smart Insights', icon: Lightbulb },
+  { id: 'tutorials', label: 'Tutorials', icon: BookOpen },
+  { id: 'verbose', label: 'Verbose', icon: Terminal },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 

@@ -40,7 +40,7 @@ export function Insights({ isElectron }: InsightsProps) {
     if (isElectron && window.electronAPI) {
       generateInsights();
     } else {
-      loadMockInsights();
+      setLoading(false);
     }
   }, [isElectron]);
 
@@ -60,11 +60,17 @@ export function Insights({ isElectron }: InsightsProps) {
         window.electronAPI.db.getSubscriptions(),
       ]);
 
+      if (!transactions || transactions.length === 0) {
+        setInsights([]);
+        setLoading(false);
+        return;
+      }
+
       const generated = generateInsightsFromData(spending, transactions, subscriptions);
       setInsights(generated);
     } catch (error) {
       console.error('Failed to generate insights:', error);
-      loadMockInsights();
+      setInsights([]);
     } finally {
       setLoading(false);
     }
@@ -141,69 +147,6 @@ export function Insights({ isElectron }: InsightsProps) {
     }
 
     return insights;
-  };
-
-  const loadMockInsights = () => {
-    setInsights([
-      {
-        id: '1',
-        type: 'saving',
-        title: 'Reduce Food Delivery by 25%',
-        description:
-          'You spent ₹18,500 on Swiggy & Zomato this month. Cutting back by 25% would save ₹4,625/month.',
-        impact:
-          'Invested at 12% returns, this becomes ₹6.5 lakhs in 7 years.',
-        action: 'Try cooking at home twice a week',
-      },
-      {
-        id: '2',
-        type: 'warning',
-        title: 'Unused Subscription Detected',
-        description:
-          'Notion Premium (₹833/month) - No activity in the last 60 days.',
-        impact: 'Cancel to save ₹10,000/year',
-        action: 'Review subscription',
-      },
-      {
-        id: '3',
-        type: 'tip',
-        title: 'Emergency Fund Goal',
-        description:
-          'Based on your expenses, you need ₹2.4L for a 6-month emergency fund.',
-        impact:
-          'You currently have ₹80,000 saved. You need ₹1.6L more.',
-        action: 'Set up auto-transfer of ₹20K/month',
-      },
-      {
-        id: '4',
-        type: 'achievement',
-        title: 'Great Savings Rate!',
-        description:
-          'You saved 37% of your income this month - that\'s exceptional!',
-        impact:
-          'Keep this up and you\'ll reach financial independence faster.',
-      },
-      {
-        id: '5',
-        type: 'saving',
-        title: 'Insurance Premium Opportunity',
-        description:
-          'Your term insurance premium is due next month. Annual payment saves 5%.',
-        impact: 'Save ₹1,500 by paying annually instead of monthly.',
-        action: 'Switch to annual payment',
-      },
-      {
-        id: '6',
-        type: 'tip',
-        title: 'Tax-Saving Investment',
-        description:
-          'You can invest up to ₹1.5L in ELSS to save tax under 80C.',
-        impact:
-          'At 30% tax bracket, this saves ₹45,000 in taxes.',
-        action: 'Start ELSS SIP before March',
-      },
-    ]);
-    setLoading(false);
   };
 
   const handleDismiss = (id: string) => {

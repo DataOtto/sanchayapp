@@ -22,6 +22,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     markEmailProcessed: (emailId: string) => ipcRenderer.invoke('db:markEmailProcessed', emailId),
   },
 
+  // Google credentials
+  google: {
+    getCredentials: () => ipcRenderer.invoke('google:getCredentials'),
+    setCredentials: (credentials: { clientId: string; clientSecret: string }) =>
+      ipcRenderer.invoke('google:setCredentials', credentials),
+    clearCredentials: () => ipcRenderer.invoke('google:clearCredentials'),
+    hasCredentials: () => ipcRenderer.invoke('google:hasCredentials'),
+  },
+
   // Gmail operations
   gmail: {
     checkAuth: () => ipcRenderer.invoke('gmail:checkAuth'),
@@ -36,11 +45,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
-  // AI operations
+  // AI provider operations
   ai: {
-    getApiKey: () => ipcRenderer.invoke('ai:getApiKey'),
-    setApiKey: (key: string) => ipcRenderer.invoke('ai:setApiKey', key),
-    clearApiKey: () => ipcRenderer.invoke('ai:clearApiKey'),
-    hasApiKey: () => ipcRenderer.invoke('ai:hasApiKey'),
+    getConfig: () => ipcRenderer.invoke('ai:getConfig'),
+    setConfig: (config: {
+      type?: string;
+      enabled?: boolean;
+      apiKey?: string;
+      baseUrl?: string;
+      model?: string;
+    }) => ipcRenderer.invoke('ai:setConfig', config),
+    clearConfig: () => ipcRenderer.invoke('ai:clearConfig'),
+    checkStatus: (type?: string) => ipcRenderer.invoke('ai:checkStatus', type),
+    getMaskedKey: (type: string) => ipcRenderer.invoke('ai:getMaskedKey', type),
+    getProviders: () => ipcRenderer.invoke('ai:getProviders'),
+  },
+
+  // Logger operations
+  logs: {
+    getAll: () => ipcRenderer.invoke('log:getAll'),
+    clear: () => ipcRenderer.invoke('log:clear'),
+    onNewLog: (callback: (data: any) => void) => {
+      const listener = (_event: IpcRendererEvent, data: any) => callback(data);
+      ipcRenderer.on('log:new', listener);
+      return () => ipcRenderer.removeListener('log:new', listener);
+    },
   },
 });

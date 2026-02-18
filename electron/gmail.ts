@@ -1,24 +1,74 @@
 import { ipcMain, BrowserWindow, shell } from 'electron';
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
+import Store from 'electron-store';
 import { getDatabase } from './database';
 import { parseFinancialEmail } from './emailParser';
-import { parseEmailWithAI, getOpenAIKey } from './aiParser';
+import { parseEmailWithAI, getAIConfig } from './ai';
+import { logger } from './logger';
+import { saveTransaction, Transaction } from './transactionUtils';
 import http from 'http';
 import url from 'url';
 
-// You'll need to get these from Google Cloud Console
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const REDIRECT_URI = 'http://localhost:8085/oauth2callback';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const store = new Store() as any;
 
+const REDIRECT_URI = 'http://localhost:8085/oauth2callback';
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 
 let oauth2Client: OAuth2Client | null = null;
 
-function getOAuth2Client(): OAuth2Client {
+// Google OAuth credential management
+export interface GoogleCredentials {
+  clientId: string;
+  clientSecret: string;
+}
+
+export function getGoogleCredentials(): GoogleCredentials | null {
+  const clientId = store.get('google_client_id') as string | undefined;
+  const clientSecret = store.get('google_client_secret') as string | undefined;
+
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+
+  return { clientId, clientSecret };
+}
+
+export function setGoogleCredentials(credentials: GoogleCredentials): void {
+  store.set('google_client_id', credentials.clientId);
+  store.set('google_client_secret', credentials.clientSecret);
+  // Reset OAuth client when credentials change
+  oauth2Client = null;
+}
+
+export function clearGoogleCredentials(): void {
+  store.delete('google_client_id');
+  store.delete('google_client_secret');
+  oauth2Client = null;
+}
+
+export function hasGoogleCredentials(): boolean {
+  const creds = getGoogleCredentials();
+  return !!(creds?.clientId && creds?.clientSecret);
+}
+
+export function getMaskedGoogleCredentials(): { clientId: string | null; clientSecret: string | null } {
+  const creds = getGoogleCredentials();
+  return {
+    clientId: creds?.clientId ? creds.clientId.substring(0, 20) + '...' : null,
+    clientSecret: creds?.clientSecret ? '••••••••' + creds.clientSecret.slice(-4) : null,
+  };
+}
+
+function getOAuth2Client(): OAuth2Client | null {
+  const creds = getGoogleCredentials();
+  if (!creds) {
+    return null;
+  }
+
   if (!oauth2Client) {
-    oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+    oauth2Client = new google.auth.OAuth2(creds.clientId, creds.clientSecret, REDIRECT_URI);
   }
   return oauth2Client;
 }
@@ -62,11 +112,40 @@ async function startLocalServer(): Promise<string> {
 export function setupGmailHandlers() {
   const db = getDatabase();
 
+  // Google credentials handlers
+  ipcMain.handle('google:getCredentials', async () => {
+    return getMaskedGoogleCredentials();
+  });
+
+  ipcMain.handle('google:setCredentials', async (_, credentials: GoogleCredentials) => {
+    setGoogleCredentials(credentials);
+    return { success: true };
+  });
+
+  ipcMain.handle('google:clearCredentials', async () => {
+    clearGoogleCredentials();
+    // Also clear tokens when credentials are cleared
+    db.prepare('DELETE FROM settings WHERE key = ?').run('gmail_tokens');
+    return { success: true };
+  });
+
+  ipcMain.handle('google:hasCredentials', async () => {
+    return hasGoogleCredentials();
+  });
+
+  // Gmail auth handlers
   ipcMain.handle('gmail:checkAuth', async () => {
+    if (!hasGoogleCredentials()) {
+      return { authenticated: false, error: 'credentials_missing' };
+    }
+
     const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get('gmail_tokens') as { value: string } | undefined;
     if (setting?.value) {
       const tokens = JSON.parse(setting.value);
       const client = getOAuth2Client();
+      if (!client) {
+        return { authenticated: false, error: 'credentials_missing' };
+      }
       client.setCredentials(tokens);
 
       // Verify tokens are still valid
@@ -81,8 +160,18 @@ export function setupGmailHandlers() {
   });
 
   ipcMain.handle('gmail:authenticate', async () => {
+    if (!hasGoogleCredentials()) {
+      logger.warning('Gmail', 'Authentication failed - no credentials configured');
+      return { success: false, error: 'Please configure Google API credentials first' };
+    }
+
     try {
+      logger.info('Gmail', 'Starting OAuth authentication...');
       const client = getOAuth2Client();
+      if (!client) {
+        logger.error('Gmail', 'Failed to create OAuth client');
+        return { success: false, error: 'Failed to create OAuth client' };
+      }
 
       const authUrl = client.generateAuthUrl({
         access_type: 'offline',
@@ -91,10 +180,12 @@ export function setupGmailHandlers() {
       });
 
       // Open auth URL in browser
+      logger.info('Gmail', 'Opening browser for authentication');
       shell.openExternal(authUrl);
 
       // Wait for callback
       const code = await startLocalServer();
+      logger.info('Gmail', 'Received OAuth callback');
 
       // Exchange code for tokens
       const { tokens } = await client.getToken(code);
@@ -103,9 +194,10 @@ export function setupGmailHandlers() {
       // Save tokens
       db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('gmail_tokens', JSON.stringify(tokens));
 
+      logger.success('Gmail', 'Authentication successful');
       return { success: true };
     } catch (error) {
-      console.error('Gmail auth error:', error);
+      logger.error('Gmail', 'Authentication failed', (error as Error).message);
       return { success: false, error: (error as Error).message };
     }
   });
@@ -121,20 +213,33 @@ export function setupGmailHandlers() {
   });
 
   ipcMain.handle('gmail:syncEmails', async (event, options?: { fullSync?: boolean }) => {
+    if (!hasGoogleCredentials()) {
+      logger.warning('Gmail', 'Sync failed - no credentials configured');
+      return { success: false, error: 'Google credentials not configured' };
+    }
+
     try {
+      logger.info('Sync', `Starting ${options?.fullSync ? 'full' : 'incremental'} email sync...`);
+
       const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get('gmail_tokens') as { value: string } | undefined;
       if (!setting?.value) {
+        logger.error('Sync', 'Not authenticated');
         return { success: false, error: 'Not authenticated' };
       }
 
       const client = getOAuth2Client();
+      if (!client) {
+        logger.error('Sync', 'Failed to create OAuth client');
+        return { success: false, error: 'Failed to create OAuth client' };
+      }
       client.setCredentials(JSON.parse(setting.value));
 
       const gmail = google.gmail({ version: 'v1', auth: client });
 
-      // Check if AI parsing is available
-      const useAI = !!getOpenAIKey();
-      console.log(`Using ${useAI ? 'AI' : 'regex'} parser for email processing`);
+      // Check if AI parsing is enabled
+      const aiConfig = getAIConfig();
+      const useAI = aiConfig.enabled;
+      logger.info('Sync', `Using ${useAI ? `${aiConfig.type} AI` : 'regex'} parser for email processing`);
 
       // Search queries for financial emails - broader when using AI
       const searchQueries = useAI
@@ -171,6 +276,7 @@ export function setupGmailHandlers() {
 
       // Remove duplicates
       const uniqueMessages = Array.from(new Map(allMessages.map(m => [m.id, m])).values());
+      logger.info('Sync', `Found ${uniqueMessages.length} unique emails to process`);
 
       // Send progress updates
       const mainWindow = BrowserWindow.getAllWindows()[0];
@@ -195,26 +301,36 @@ export function setupGmailHandlers() {
             : parseFinancialEmail(fullMessage.data);
 
           if (parsed.transactions.length > 0) {
-            // Store transactions
-            const stmt = db.prepare(`
-              INSERT OR REPLACE INTO transactions (id, date, amount, description, category, type, source, email_id, merchant, raw_data)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `);
+            logger.success('Sync', `Found ${parsed.transactions.length} transaction(s) in email`, { emailId: message.id });
 
             for (const tx of parsed.transactions) {
-              stmt.run(
-                tx.id,
-                tx.date,
-                tx.amount,
-                tx.description,
-                tx.category,
-                tx.type,
-                tx.source,
-                message.id,
-                tx.merchant,
-                JSON.stringify(tx.rawData)
-              );
-              newTransactions++;
+              // Use saveTransaction which handles duplicates and reversals
+              const txData: Transaction = {
+                id: tx.id,
+                date: tx.date,
+                amount: tx.amount,
+                description: tx.description,
+                category: tx.category,
+                type: tx.type,
+                source: tx.source,
+                email_id: message.id,
+                merchant: tx.merchant,
+                rawData: tx.rawData,
+              };
+
+              const result = saveTransaction(txData);
+
+              if (result.saved) {
+                if (result.reason === 'duplicate') {
+                  logger.warning('Sync', `Skipped duplicate: ${tx.description} - ₹${tx.amount}`);
+                } else if (result.reason === 'reversal') {
+                  logger.info('Sync', `Saved reversal: ${tx.description} - ₹${tx.amount}`);
+                  newTransactions++;
+                } else {
+                  logger.debug('Sync', `Saved: ${tx.description} - ₹${tx.amount} (${tx.type})`);
+                  newTransactions++;
+                }
+              }
             }
           }
 
@@ -250,16 +366,17 @@ export function setupGmailHandlers() {
             });
           }
         } catch (error) {
-          console.error('Error processing email:', message.id, error);
+          logger.error('Sync', `Error processing email ${message.id}`, (error as Error).message);
         }
       }
 
       // Update last sync time
       db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('last_sync', JSON.stringify(new Date().toISOString()));
 
+      logger.success('Sync', `Sync complete! Processed ${processedCount} emails, found ${newTransactions} new transactions`);
       return { success: true, processedCount, newTransactions };
     } catch (error) {
-      console.error('Sync error:', error);
+      logger.error('Sync', 'Sync failed', (error as Error).message);
       return { success: false, error: (error as Error).message };
     }
   });

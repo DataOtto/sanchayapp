@@ -60,18 +60,31 @@ const slides = [
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [displaySlide, setDisplaySlide] = useState(0);
+  const [animationPhase, setAnimationPhase] = useState<'idle' | 'exit' | 'enter'>('idle');
   const { theme } = useTheme();
   const t = themes[theme];
 
-  const slide = slides[currentSlide];
+  const slide = slides[displaySlide];
   const isLastSlide = currentSlide === slides.length - 1;
 
   const goToSlide = (index: number) => {
-    if (isAnimating || index === currentSlide) return;
-    setIsAnimating(true);
+    if (animationPhase !== 'idle' || index === currentSlide) return;
+
+    // Phase 1: Exit animation
+    setAnimationPhase('exit');
     setCurrentSlide(index);
-    setTimeout(() => setIsAnimating(false), 500);
+
+    // Phase 2: Change content after exit completes
+    setTimeout(() => {
+      setDisplaySlide(index);
+      setAnimationPhase('enter');
+    }, 300);
+
+    // Phase 3: Complete enter animation
+    setTimeout(() => {
+      setAnimationPhase('idle');
+    }, 600);
   };
 
   const nextSlide = () => {
@@ -89,6 +102,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   };
 
   const IconComponent = slide.icon;
+
+  const isExiting = animationPhase === 'exit';
+  const isEntering = animationPhase === 'enter';
 
   return (
     <div
@@ -149,7 +165,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         <div className="flex flex-col items-center">
           {/* Icon */}
           <div
-            className={`relative mb-8 transition-all duration-500 ${isAnimating ? 'scale-90 opacity-0' : 'scale-100 opacity-100'}`}
+            className="relative mb-8 transition-all duration-300 ease-out"
+            style={{
+              transform: isExiting ? 'scale(0.8) translateY(-20px)' : isEntering ? 'scale(1) translateY(0)' : 'scale(1) translateY(0)',
+              opacity: isExiting ? 0 : 1,
+            }}
           >
             <div
               className="w-24 h-24 rounded-3xl flex items-center justify-center relative"
@@ -173,7 +193,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
           {/* Text content */}
           <div
-            className={`text-center max-w-xl transition-all duration-500 ${isAnimating ? 'translate-y-4 opacity-0' : 'translate-y-0 opacity-100'}`}
+            className="text-center max-w-xl transition-all duration-300 ease-out"
+            style={{
+              transform: isExiting ? 'translateY(20px)' : 'translateY(0)',
+              opacity: isExiting ? 0 : 1,
+            }}
           >
             <p
               className="text-sm font-medium uppercase tracking-wider mb-3"
@@ -197,7 +221,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
           {/* Visual element based on slide */}
           <div
-            className={`mt-12 transition-all duration-500 delay-100 ${isAnimating ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}`}
+            className="mt-12 transition-all duration-300 ease-out"
+            style={{
+              transform: isExiting ? 'scale(0.9) translateY(10px)' : 'scale(1) translateY(0)',
+              opacity: isExiting ? 0 : 1,
+              transitionDelay: isExiting ? '0ms' : '100ms',
+            }}
           >
             <SlideVisual visual={slide.visual} theme={theme} />
           </div>

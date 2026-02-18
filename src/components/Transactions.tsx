@@ -8,6 +8,8 @@ import {
   ArrowDownLeft,
   Calendar,
   Download,
+  RotateCcw,
+  Copy,
 } from 'lucide-react';
 import { useTheme, themes } from '@/lib/theme';
 import type { Transaction } from '@/types';
@@ -44,6 +46,7 @@ export function Transactions({ isElectron }: TransactionsProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit'>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [showDuplicates, setShowDuplicates] = useState(false);
   const { theme } = useTheme();
   const t = themes[theme];
 
@@ -51,7 +54,7 @@ export function Transactions({ isElectron }: TransactionsProps) {
     if (isElectron && window.electronAPI) {
       loadData();
     } else {
-      loadMockData();
+      setLoading(false);
     }
   }, [isElectron]);
 
@@ -59,35 +62,13 @@ export function Transactions({ isElectron }: TransactionsProps) {
     try {
       setLoading(true);
       const data = await window.electronAPI.db.getTransactions({ limit: 100 });
-      setTransactions(data);
+      setTransactions(data || []);
     } catch (error) {
       console.error('Failed to load transactions:', error);
-      loadMockData();
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadMockData = () => {
-    const mockTransactions: Transaction[] = [
-      { id: '1', date: '2024-01-15', amount: 649, description: 'Netflix Subscription', category: 'Entertainment', type: 'debit', source: 'HDFC' },
-      { id: '2', date: '2024-01-15', amount: 150000, description: 'Salary Credited - January', category: 'Salary', type: 'credit', source: 'HDFC' },
-      { id: '3', date: '2024-01-14', amount: 1250, description: 'Swiggy Order - Biryani Paradise', category: 'Food', type: 'debit', source: 'ICICI' },
-      { id: '4', date: '2024-01-14', amount: 5500, description: 'Amazon - Electronics', category: 'Shopping', type: 'debit', source: 'Axis' },
-      { id: '5', date: '2024-01-13', amount: 500, description: 'Uber Ride - Airport', category: 'Transport', type: 'debit', source: 'Paytm' },
-      { id: '6', date: '2024-01-13', amount: 2500, description: 'Freelance Payment - Logo Design', category: 'Freelance', type: 'credit', source: 'Razorpay' },
-      { id: '7', date: '2024-01-12', amount: 3500, description: 'Electricity Bill', category: 'Utilities', type: 'debit', source: 'HDFC' },
-      { id: '8', date: '2024-01-12', amount: 850, description: 'Zomato Order', category: 'Food', type: 'debit', source: 'ICICI' },
-      { id: '9', date: '2024-01-11', amount: 15000, description: 'SIP - Axis Bluechip Fund', category: 'Investment', type: 'debit', source: 'HDFC' },
-      { id: '10', date: '2024-01-11', amount: 1200, description: 'Amazon Refund', category: 'Refund', type: 'credit', source: 'Amazon' },
-      { id: '11', date: '2024-01-10', amount: 8500, description: 'Flipkart - Furniture', category: 'Shopping', type: 'debit', source: 'Axis' },
-      { id: '12', date: '2024-01-10', amount: 350, description: 'Ola Ride', category: 'Transport', type: 'debit', source: 'Paytm' },
-      { id: '13', date: '2024-01-09', amount: 999, description: 'Hotstar Premium', category: 'Entertainment', type: 'debit', source: 'HDFC' },
-      { id: '14', date: '2024-01-09', amount: 2000, description: 'Credit Card Cashback', category: 'Cashback', type: 'credit', source: 'ICICI' },
-      { id: '15', date: '2024-01-08', amount: 450, description: 'Dominos Pizza', category: 'Food', type: 'debit', source: 'HDFC' },
-    ];
-    setTransactions(mockTransactions);
-    setLoading(false);
   };
 
   const formatCurrency = (amount: number) => {
@@ -117,17 +98,22 @@ export function Transactions({ isElectron }: TransactionsProps) {
 
     const matchesType = filterType === 'all' || tx.type === filterType;
     const matchesCategory = filterCategory === 'all' || tx.category === filterCategory;
+    const matchesDuplicate = showDuplicates || tx.is_duplicate !== 1;
 
-    return matchesSearch && matchesType && matchesCategory;
+    return matchesSearch && matchesType && matchesCategory && matchesDuplicate;
   });
 
+  // Calculate totals excluding duplicates and reversed transactions
   const totalCredit = filteredTransactions
-    .filter((t) => t.type === 'credit')
+    .filter((t) => t.type === 'credit' && t.is_duplicate !== 1)
     .reduce((sum, t) => sum + t.amount, 0);
 
   const totalDebit = filteredTransactions
-    .filter((t) => t.type === 'debit')
+    .filter((t) => t.type === 'debit' && t.is_duplicate !== 1 && !t.reversed_by)
     .reduce((sum, t) => sum + t.amount, 0);
+
+  const duplicateCount = transactions.filter(t => t.is_duplicate === 1).length;
+  const reversedCount = transactions.filter(t => t.reversed_by).length;
 
   if (loading) {
     return (
@@ -251,6 +237,22 @@ export function Transactions({ isElectron }: TransactionsProps) {
               </option>
             ))}
           </select>
+
+          {/* Show Duplicates Toggle */}
+          {duplicateCount > 0 && (
+            <label
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer"
+              style={{ background: t.bgInput, color: t.textMuted }}
+            >
+              <input
+                type="checkbox"
+                checked={showDuplicates}
+                onChange={(e) => setShowDuplicates(e.target.checked)}
+                className="rounded"
+              />
+              Show duplicates ({duplicateCount})
+            </label>
+          )}
         </div>
 
         {/* Transactions List */}
@@ -280,7 +282,27 @@ export function Transactions({ isElectron }: TransactionsProps) {
 
                 {/* Details */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate" style={{ color: t.text }}>{tx.description}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium truncate" style={{ color: t.text }}>{tx.description}</p>
+                    {tx.reversed_by && (
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-amber-500/10 text-amber-500" title="This transaction was reversed/refunded">
+                        <RotateCcw size={10} />
+                        Reversed
+                      </span>
+                    )}
+                    {tx.reverses && (
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-500" title="This is a refund/reversal">
+                        <RotateCcw size={10} />
+                        Refund
+                      </span>
+                    )}
+                    {tx.is_duplicate === 1 && (
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-gray-500/10 text-gray-500" title="Duplicate transaction">
+                        <Copy size={10} />
+                        Duplicate
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-sm mt-0.5" style={{ color: t.textMuted }}>
                     <span>{tx.category}</span>
                     <span>•</span>
@@ -327,7 +349,9 @@ export function Transactions({ isElectron }: TransactionsProps) {
             <Search size={48} className="mx-auto mb-4 opacity-50" />
             <p className="text-lg font-medium">No transactions found</p>
             <p className="text-sm mt-1">
-              Try adjusting your filters or search query
+              {transactions.length === 0
+                ? 'Connect Gmail in Settings to sync your financial emails'
+                : 'Try adjusting your filters or search query'}
             </p>
           </div>
         )}

@@ -9,3 +9,5 @@ export { Income } from './Income';
 export { Transactions } from './Transactions';
 export { Settings } from './Settings';
 export { Onboarding } from './Onboarding';
+export { Tutorials } from './Tutorials';
+export { Verbose } from './Verbose';

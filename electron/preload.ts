@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setSetting: (key: string, value: any) => ipcRenderer.invoke('db:setSetting', key, value),
     isEmailProcessed: (emailId: string) => ipcRenderer.invoke('db:isEmailProcessed', emailId),
     markEmailProcessed: (emailId: string) => ipcRenderer.invoke('db:markEmailProcessed', emailId),
+    clearAllData: () => ipcRenderer.invoke('db:clearAllData'),
   },
 
   // Google credentials

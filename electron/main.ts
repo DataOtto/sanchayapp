@@ -221,6 +221,18 @@ function setupIpcHandlers() {
     return stmt.run(emailId, new Date().toISOString());
   });
 
+  ipcMain.handle('db:clearAllData', async () => {
+    // Clear all data tables but preserve Google credentials
+    db.exec(`
+      DELETE FROM transactions;
+      DELETE FROM subscriptions;
+      DELETE FROM processed_emails;
+      DELETE FROM insights;
+    `);
+    logger.success('Database', 'All data cleared (credentials preserved)');
+    return { success: true };
+  });
+
   // AI provider handlers
   ipcMain.handle('ai:getConfig', async () => {
     return getAIConfig();

@@ -124,6 +124,7 @@ export interface ElectronAPI {
     setSetting: (key: string, value: any) => Promise<void>;
     isEmailProcessed: (emailId: string) => Promise<boolean>;
     markEmailProcessed: (emailId: string) => Promise<void>;
+    clearAllData: () => Promise<{ success: boolean }>;
   };
   google: {
     getCredentials: () => Promise<MaskedGoogleCredentials>;

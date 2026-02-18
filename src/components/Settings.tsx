@@ -258,7 +258,14 @@ export function Settings({
 
   const handleClearData = async () => {
     if (!isElectron || !window.electronAPI) return;
-    setShowDeleteConfirm(false);
+    try {
+      await window.electronAPI.db.clearAllData();
+      setShowDeleteConfirm(false);
+      // Reload the page to reflect cleared data
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to clear data:', error);
+    }
   };
 
   const currentProvider = providers[aiConfig.type];

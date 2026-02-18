@@ -35,4 +35,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('gmail:syncProgress', listener);
     },
   },
+
+  // AI operations
+  ai: {
+    getApiKey: () => ipcRenderer.invoke('ai:getApiKey'),
+    setApiKey: (key: string) => ipcRenderer.invoke('ai:setApiKey', key),
+    clearApiKey: () => ipcRenderer.invoke('ai:clearApiKey'),
+    hasApiKey: () => ipcRenderer.invoke('ai:hasApiKey'),
+  },
 });

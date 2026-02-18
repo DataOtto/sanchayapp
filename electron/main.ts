@@ -3,6 +3,7 @@ import path from 'path';
 import serve from 'electron-serve';
 import { initDatabase, getDatabase } from './database';
 import { setupGmailHandlers } from './gmail';
+import { getOpenAIKey, setOpenAIKey, clearOpenAIKey } from './aiParser';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -207,6 +208,26 @@ function setupIpcHandlers() {
   ipcMain.handle('db:markEmailProcessed', async (_, emailId) => {
     const stmt = db.prepare('INSERT OR IGNORE INTO processed_emails (email_id, processed_at) VALUES (?, ?)');
     return stmt.run(emailId, new Date().toISOString());
+  });
+
+  // OpenAI API key handlers
+  ipcMain.handle('ai:getApiKey', async () => {
+    const key = getOpenAIKey();
+    return key ? '••••••••' + key.slice(-4) : null;
+  });
+
+  ipcMain.handle('ai:setApiKey', async (_, key) => {
+    setOpenAIKey(key);
+    return { success: true };
+  });
+
+  ipcMain.handle('ai:clearApiKey', async () => {
+    clearOpenAIKey();
+    return { success: true };
+  });
+
+  ipcMain.handle('ai:hasApiKey', async () => {
+    return !!getOpenAIKey();
   });
 }
 

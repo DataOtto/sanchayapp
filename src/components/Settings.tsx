@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Mail,
   Shield,
@@ -11,6 +11,10 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
+  Brain,
+  Key,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useTheme, themes } from '@/lib/theme';
 
@@ -32,8 +36,61 @@ export function Settings({
   lastSync,
 }: SettingsProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [aiKeyConfigured, setAiKeyConfigured] = useState(false);
+  const [aiKeyDisplay, setAiKeyDisplay] = useState<string | null>(null);
+  const [newApiKey, setNewApiKey] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [savingKey, setSavingKey] = useState(false);
   const { theme } = useTheme();
   const t = themes[theme];
+
+  useEffect(() => {
+    if (isElectron && window.electronAPI?.ai) {
+      loadAiKeyStatus();
+    }
+  }, [isElectron]);
+
+  const loadAiKeyStatus = async () => {
+    try {
+      const hasKey = await window.electronAPI.ai.hasApiKey();
+      setAiKeyConfigured(hasKey);
+      if (hasKey) {
+        const maskedKey = await window.electronAPI.ai.getApiKey();
+        setAiKeyDisplay(maskedKey);
+      }
+    } catch (error) {
+      console.error('Failed to load AI key status:', error);
+    }
+  };
+
+  const handleSaveApiKey = async () => {
+    if (!newApiKey.trim() || !window.electronAPI?.ai) return;
+
+    setSavingKey(true);
+    try {
+      await window.electronAPI.ai.setApiKey(newApiKey.trim());
+      setAiKeyConfigured(true);
+      const maskedKey = await window.electronAPI.ai.getApiKey();
+      setAiKeyDisplay(maskedKey);
+      setNewApiKey('');
+    } catch (error) {
+      console.error('Failed to save API key:', error);
+    } finally {
+      setSavingKey(false);
+    }
+  };
+
+  const handleClearApiKey = async () => {
+    if (!window.electronAPI?.ai) return;
+
+    try {
+      await window.electronAPI.ai.clearApiKey();
+      setAiKeyConfigured(false);
+      setAiKeyDisplay(null);
+    } catch (error) {
+      console.error('Failed to clear API key:', error);
+    }
+  };
 
   const formatLastSync = (dateStr?: string) => {
     if (!dateStr) return 'Never';
@@ -146,6 +203,126 @@ export function Settings({
                   Never share your data with third parties
                 </li>
               </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* AI Configuration */}
+        <div
+          className="rounded-xl"
+          style={{ background: t.bgCard, border: `1px solid ${t.border}` }}
+        >
+          <div className="p-5" style={{ borderBottom: `1px solid ${t.border}` }}>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-purple-500/10 text-purple-500">
+                <Brain size={20} />
+              </div>
+              <div>
+                <h3 className="font-semibold" style={{ color: t.text }}>AI Processing</h3>
+                <p className="text-sm" style={{ color: t.textMuted }}>
+                  Intelligent transaction categorization
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                {aiKeyConfigured ? (
+                  <CheckCircle className="text-emerald-500" size={20} />
+                ) : (
+                  <Key size={20} style={{ color: t.textMuted }} />
+                )}
+                <div>
+                  <p className="font-medium" style={{ color: t.text }}>
+                    OpenAI API Key
+                  </p>
+                  {aiKeyConfigured && aiKeyDisplay && (
+                    <p className="text-sm font-mono" style={{ color: t.textMuted }}>
+                      {aiKeyDisplay}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {aiKeyConfigured && (
+                <button
+                  onClick={handleClearApiKey}
+                  className="px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-sm font-medium hover:bg-red-500/20 transition-colors"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+
+            {!aiKeyConfigured && (
+              <div className="space-y-3">
+                <div className="relative">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={newApiKey}
+                    onChange={(e) => setNewApiKey(e.target.value)}
+                    placeholder="sk-..."
+                    className="w-full px-4 py-3 rounded-lg text-sm font-mono pr-12"
+                    style={{
+                      background: t.bgInput,
+                      color: t.text,
+                      border: `1px solid ${t.border}`,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                    style={{ color: t.textMuted }}
+                  >
+                    {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <button
+                  onClick={handleSaveApiKey}
+                  disabled={!newApiKey.trim() || savingKey}
+                  className="w-full px-4 py-2.5 bg-purple-500 text-white rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingKey ? 'Saving...' : 'Save API Key'}
+                </button>
+              </div>
+            )}
+
+            <div className="mt-4 p-4 rounded-lg" style={{ background: t.bgInput }}>
+              <h4 className="text-sm font-medium mb-2" style={{ color: t.text }}>
+                Why do we need this?
+              </h4>
+              <ul className="text-sm space-y-1.5" style={{ color: t.textMuted }}>
+                <li className="flex items-start gap-2">
+                  <CheckCircle size={14} className="text-emerald-500 mt-0.5 shrink-0" />
+                  <span>Smarter transaction categorization using AI</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle size={14} className="text-emerald-500 mt-0.5 shrink-0" />
+                  <span>Works with any bank or payment service worldwide</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle size={14} className="text-emerald-500 mt-0.5 shrink-0" />
+                  <span>Your API key stays on your device</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Shield size={14} className="text-blue-500 mt-0.5 shrink-0" />
+                  <span>Emails processed via OpenAI API (minimal data sent)</span>
+                </li>
+              </ul>
+              <p className="text-xs mt-3" style={{ color: t.textDim }}>
+                Get your API key from{' '}
+                <a
+                  href="https://platform.openai.com/api-keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-purple-500 hover:underline"
+                >
+                  platform.openai.com
+                </a>
+              </p>
             </div>
           </div>
         </div>

@@ -2,7 +2,8 @@ import { ipcMain, BrowserWindow, shell } from 'electron';
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { getDatabase } from './database';
-import { parseFinancialEmail, type ParsedTransaction } from './emailParser';
+import { parseFinancialEmail } from './emailParser';
+import { parseEmailWithAI, getOpenAIKey } from './aiParser';
 import http from 'http';
 import url from 'url';
 
@@ -131,14 +132,26 @@ export function setupGmailHandlers() {
 
       const gmail = google.gmail({ version: 'v1', auth: client });
 
-      // Search queries for financial emails
-      const searchQueries = [
-        'from:(alerts@hdfcbank.net OR alerts@icicibank.com OR alerts@axisbank.com OR alerts@sbi.co.in OR noreply@paytm.com)',
-        'subject:(transaction OR payment OR debit OR credit OR "amount" OR receipt OR invoice)',
-        'from:(noreply@netflix.com OR noreply@spotify.com OR receipts@amazon.in OR noreply@swiggy.in OR auto-confirm@amazon.in)',
-        'from:(zerodha OR groww OR upstox) subject:(statement OR trade OR dividend)',
-        'subject:(salary credited OR salary credit)',
-      ];
+      // Check if AI parsing is available
+      const useAI = !!getOpenAIKey();
+      console.log(`Using ${useAI ? 'AI' : 'regex'} parser for email processing`);
+
+      // Search queries for financial emails - broader when using AI
+      const searchQueries = useAI
+        ? [
+            // With AI, we can cast a wider net
+            'subject:(transaction OR payment OR receipt OR invoice OR order OR purchase)',
+            'subject:(subscription OR renewal OR billing OR charged)',
+            'subject:(salary OR credited OR deposit OR refund OR cashback)',
+            'from:(bank OR pay OR wallet OR finance)',
+            'subject:(statement OR summary)',
+          ]
+        : [
+            // Without AI, use specific patterns
+            'subject:(transaction OR payment OR debit OR credit OR receipt OR invoice)',
+            'subject:(subscription OR renewal OR billing)',
+            'subject:(salary credited OR deposit)',
+          ];
 
       const allMessages: any[] = [];
       let processedCount = 0;
@@ -176,7 +189,10 @@ export function setupGmailHandlers() {
             format: 'full',
           });
 
-          const parsed = parseFinancialEmail(fullMessage.data);
+          // Use AI parser if available, otherwise fall back to regex
+          const parsed = useAI
+            ? await parseEmailWithAI(fullMessage.data)
+            : parseFinancialEmail(fullMessage.data);
 
           if (parsed.transactions.length > 0) {
             // Store transactions

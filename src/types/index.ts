@@ -84,6 +84,12 @@ export interface ElectronAPI {
     getLastSync: () => Promise<string | null>;
     onSyncProgress: (callback: (data: SyncProgress) => void) => () => void;
   };
+  ai: {
+    getApiKey: () => Promise<string | null>;
+    setApiKey: (key: string) => Promise<{ success: boolean }>;
+    clearApiKey: () => Promise<{ success: boolean }>;
+    hasApiKey: () => Promise<boolean>;
+  };
 }
 
 export interface TransactionFilters {

@@ -9,6 +9,7 @@ import {
   Income,
   Transactions,
   Settings,
+  Onboarding,
 } from '@/components';
 import { useTheme, themes } from '@/lib/theme';
 import type { SyncProgress } from '@/types';
@@ -20,12 +21,21 @@ export default function Home() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | undefined>();
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const { theme } = useTheme();
   const t = themes[theme];
 
   useEffect(() => {
     const electronAvailable = typeof window !== 'undefined' && window.electronAPI;
     setIsElectron(!!electronAvailable);
+
+    // Check if onboarding has been completed
+    const onboardingComplete = localStorage.getItem('sanchay_onboarding_complete');
+    if (!onboardingComplete) {
+      setShowOnboarding(true);
+    }
+    setIsLoading(false);
 
     if (electronAvailable) {
       checkAuthStatus();
@@ -38,6 +48,11 @@ export default function Home() {
       return () => unsubscribe();
     }
   }, []);
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('sanchay_onboarding_complete', 'true');
+    setShowOnboarding(false);
+  };
 
   const checkAuthStatus = async () => {
     try {
@@ -127,6 +142,26 @@ export default function Home() {
         return <Dashboard isElectron={isElectron} />;
     }
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div
+        className="flex h-screen items-center justify-center"
+        style={{ background: t.bg }}
+      >
+        <div
+          className="w-12 h-12 rounded-full border-2 border-t-transparent animate-spin"
+          style={{ borderColor: `${t.accent} transparent ${t.accent} ${t.accent}` }}
+        />
+      </div>
+    );
+  }
+
+  // Show onboarding for first-time users
+  if (showOnboarding) {
+    return <Onboarding onComplete={handleOnboardingComplete} />;
+  }
 
   return (
     <div

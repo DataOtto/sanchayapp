@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     checkAuth: () => ipcRenderer.invoke('gmail:checkAuth'),
     authenticate: () => ipcRenderer.invoke('gmail:authenticate'),
     disconnect: () => ipcRenderer.invoke('gmail:disconnect'),
-    syncEmails: (options?: { fullSync?: boolean }) => ipcRenderer.invoke('gmail:syncEmails', options),
+    syncEmails: (options?: { fullSync?: boolean; daysBack?: number }) => ipcRenderer.invoke('gmail:syncEmails', options),
     getLastSync: () => ipcRenderer.invoke('gmail:getLastSync'),
     onSyncProgress: (callback: (data: { processed: number; total: number; newTransactions: number }) => void) => {
       const listener = (_event: IpcRendererEvent, data: any) => callback(data);
@@ -60,6 +60,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     checkStatus: (type?: string) => ipcRenderer.invoke('ai:checkStatus', type),
     getMaskedKey: (type: string) => ipcRenderer.invoke('ai:getMaskedKey', type),
     getProviders: () => ipcRenderer.invoke('ai:getProviders'),
+  },
+
+  // Settings/preferences
+  settings: {
+    getCurrency: () => ipcRenderer.invoke('settings:getCurrency'),
+    setCurrency: (currency: string) => ipcRenderer.invoke('settings:setCurrency', currency),
   },
 
   // Logger operations

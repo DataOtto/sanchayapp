@@ -233,6 +233,22 @@ function setupIpcHandlers() {
     return { success: true };
   });
 
+  // User preferences handlers
+  ipcMain.handle('settings:getCurrency', async () => {
+    const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get('user_currency') as { value: string } | undefined;
+    return setting?.value || 'INR';
+  });
+
+  ipcMain.handle('settings:setCurrency', async (_, currency: string) => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)').run(
+      'user_currency',
+      currency,
+      new Date().toISOString()
+    );
+    logger.info('Settings', `Currency set to ${currency}`);
+    return { success: true };
+  });
+
   // AI provider handlers
   ipcMain.handle('ai:getConfig', async () => {
     return getAIConfig();

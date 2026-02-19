@@ -212,14 +212,15 @@ export function setupGmailHandlers() {
     }
   });
 
-  ipcMain.handle('gmail:syncEmails', async (event, options?: { fullSync?: boolean }) => {
+  ipcMain.handle('gmail:syncEmails', async (event, options?: { fullSync?: boolean; daysBack?: number }) => {
     if (!hasGoogleCredentials()) {
       logger.warning('Gmail', 'Sync failed - no credentials configured');
       return { success: false, error: 'Google credentials not configured' };
     }
 
     try {
-      logger.info('Sync', `Starting ${options?.fullSync ? 'full' : 'incremental'} email sync...`);
+      const daysBack = options?.daysBack || 30; // Default to 30 days
+      logger.info('Sync', `Starting sync for last ${daysBack} days...`);
 
       const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get('gmail_tokens') as { value: string } | undefined;
       if (!setting?.value) {
@@ -241,8 +242,20 @@ export function setupGmailHandlers() {
       const useAI = aiConfig.enabled;
       logger.info('Sync', `Using ${useAI ? `${aiConfig.type} AI` : 'regex'} parser for email processing`);
 
+      // Get user's preferred currency
+      const currencySetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('user_currency') as { value: string } | undefined;
+      const userCurrency = currencySetting?.value || 'INR';
+      logger.info('Sync', `Filtering for currency: ${userCurrency}`);
+
+      // Calculate date filter
+      const afterDate = new Date();
+      afterDate.setDate(afterDate.getDate() - daysBack);
+      const afterDateStr = `${afterDate.getFullYear()}/${String(afterDate.getMonth() + 1).padStart(2, '0')}/${String(afterDate.getDate()).padStart(2, '0')}`;
+      const dateFilter = `after:${afterDateStr}`;
+      logger.info('Sync', `Date filter: ${dateFilter}`);
+
       // Search queries for financial emails - broader when using AI
-      const searchQueries = useAI
+      const baseQueries = useAI
         ? [
             // With AI, we can cast a wider net
             'subject:(transaction OR payment OR receipt OR invoice OR order OR purchase)',
@@ -258,6 +271,9 @@ export function setupGmailHandlers() {
             'subject:(salary credited OR deposit)',
           ];
 
+      // Add date filter to all queries
+      const searchQueries = baseQueries.map(q => `${q} ${dateFilter}`);
+
       const allMessages: any[] = [];
       let processedCount = 0;
       let newTransactions = 0;
@@ -266,7 +282,7 @@ export function setupGmailHandlers() {
         const response = await gmail.users.messages.list({
           userId: 'me',
           q: query,
-          maxResults: options?.fullSync ? 500 : 50,
+          maxResults: 500, // Get more results since we're filtering by date
         });
 
         if (response.data.messages) {
@@ -304,6 +320,13 @@ export function setupGmailHandlers() {
             logger.success('Sync', `Found ${parsed.transactions.length} transaction(s) in email`, { emailId: message.id });
 
             for (const tx of parsed.transactions) {
+              // Check currency - skip if doesn't match user's preferred currency
+              const txCurrency = tx.rawData?.currency as string || 'INR';
+              if (txCurrency.toUpperCase() !== userCurrency.toUpperCase()) {
+                logger.warning('Sync', `Skipped ${txCurrency} transaction (user currency: ${userCurrency}): ${tx.description}`);
+                continue;
+              }
+
               // Use saveTransaction which handles duplicates and reversals
               const txData: Transaction = {
                 id: tx.id,
@@ -321,13 +344,14 @@ export function setupGmailHandlers() {
               const result = saveTransaction(txData);
 
               if (result.saved) {
+                const currencySymbol = userCurrency === 'INR' ? '₹' : userCurrency === 'USD' ? '$' : userCurrency;
                 if (result.reason === 'duplicate') {
-                  logger.warning('Sync', `Skipped duplicate: ${tx.description} - ₹${tx.amount}`);
+                  logger.warning('Sync', `Skipped duplicate: ${tx.description} - ${currencySymbol}${tx.amount}`);
                 } else if (result.reason === 'reversal') {
-                  logger.info('Sync', `Saved reversal: ${tx.description} - ₹${tx.amount}`);
+                  logger.info('Sync', `Saved reversal: ${tx.description} - ${currencySymbol}${tx.amount}`);
                   newTransactions++;
                 } else {
-                  logger.debug('Sync', `Saved: ${tx.description} - ₹${tx.amount} (${tx.type})`);
+                  logger.debug('Sync', `Saved: ${tx.description} - ${currencySymbol}${tx.amount} (${tx.type})`);
                   newTransactions++;
                 }
               }
@@ -335,22 +359,29 @@ export function setupGmailHandlers() {
           }
 
           if (parsed.subscription) {
-            const stmt = db.prepare(`
-              INSERT OR REPLACE INTO subscriptions (id, name, amount, currency, billing_cycle, next_billing_date, category, status, email_id, last_detected)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `);
-            stmt.run(
-              parsed.subscription.id,
-              parsed.subscription.name,
-              parsed.subscription.amount,
-              parsed.subscription.currency,
-              parsed.subscription.billingCycle,
-              parsed.subscription.nextBillingDate,
-              parsed.subscription.category,
-              'active',
-              message.id,
-              new Date().toISOString()
-            );
+            // Check subscription currency
+            const subCurrency = parsed.subscription.currency || 'USD';
+            if (subCurrency.toUpperCase() !== userCurrency.toUpperCase()) {
+              logger.warning('Sync', `Skipped ${subCurrency} subscription (user currency: ${userCurrency}): ${parsed.subscription.name}`);
+            } else {
+              const stmt = db.prepare(`
+                INSERT OR REPLACE INTO subscriptions (id, name, amount, currency, billing_cycle, next_billing_date, category, status, email_id, last_detected)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `);
+              stmt.run(
+                parsed.subscription.id,
+                parsed.subscription.name,
+                parsed.subscription.amount,
+                parsed.subscription.currency,
+                parsed.subscription.billingCycle,
+                parsed.subscription.nextBillingDate,
+                parsed.subscription.category,
+                'active',
+                message.id,
+                new Date().toISOString()
+              );
+              logger.info('Sync', `Saved subscription: ${parsed.subscription.name}`);
+            }
           }
 
           // Mark as processed

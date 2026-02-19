@@ -55,6 +55,10 @@ export function Settings({
 }: SettingsProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Currency setting
+  const [currency, setCurrency] = useState('INR');
+  const [savingCurrency, setSavingCurrency] = useState(false);
+
   // Google credentials state
   const [hasGoogleCreds, setHasGoogleCreds] = useState(false);
   const [googleCreds, setGoogleCreds] = useState<MaskedGoogleCredentials>({ clientId: null, clientSecret: null });
@@ -94,7 +98,32 @@ export function Settings({
     if (isElectron && window.electronAPI?.google) {
       loadGoogleCredentials();
     }
+    if (isElectron && window.electronAPI?.settings) {
+      loadCurrency();
+    }
   }, [isElectron]);
+
+  const loadCurrency = async () => {
+    try {
+      const curr = await window.electronAPI.settings.getCurrency();
+      setCurrency(curr);
+    } catch (error) {
+      console.error('Failed to load currency:', error);
+    }
+  };
+
+  const handleCurrencyChange = async (newCurrency: string) => {
+    if (!window.electronAPI?.settings) return;
+    setSavingCurrency(true);
+    try {
+      await window.electronAPI.settings.setCurrency(newCurrency);
+      setCurrency(newCurrency);
+    } catch (error) {
+      console.error('Failed to save currency:', error);
+    } finally {
+      setSavingCurrency(false);
+    }
+  };
 
   useEffect(() => {
     if (isElectron && window.electronAPI?.ai && aiConfig.type) {
@@ -280,6 +309,53 @@ export function Settings({
           <p className="text-sm mt-1" style={{ color: t.textMuted }}>
             Manage your account and preferences
           </p>
+        </div>
+
+        {/* Currency Preferences */}
+        <div
+          className="rounded-xl"
+          style={{ background: t.bgCard, border: `1px solid ${t.border}` }}
+        >
+          <div className="p-5" style={{ borderBottom: `1px solid ${t.border}` }}>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                <Database size={20} />
+              </div>
+              <div>
+                <h3 className="font-semibold" style={{ color: t.text }}>Currency Preferences</h3>
+                <p className="text-sm" style={{ color: t.textMuted }}>
+                  Only transactions in this currency will be synced
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium" style={{ color: t.textSecondary }}>
+                Primary Currency
+              </label>
+              <select
+                value={currency}
+                onChange={(e) => handleCurrencyChange(e.target.value)}
+                disabled={savingCurrency}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                style={{ background: t.bgInput, color: t.text, border: `1px solid ${t.border}` }}
+              >
+                <option value="INR">INR - Indian Rupee (₹)</option>
+                <option value="USD">USD - US Dollar ($)</option>
+                <option value="EUR">EUR - Euro (€)</option>
+                <option value="GBP">GBP - British Pound (£)</option>
+                <option value="AUD">AUD - Australian Dollar (A$)</option>
+                <option value="CAD">CAD - Canadian Dollar (C$)</option>
+                <option value="SGD">SGD - Singapore Dollar (S$)</option>
+                <option value="AED">AED - UAE Dirham (د.إ)</option>
+              </select>
+            </div>
+            <p className="text-xs mt-3" style={{ color: t.textMuted }}>
+              Transactions in other currencies will be skipped during Gmail sync
+            </p>
+          </div>
         </div>
 
         {/* Google API Configuration */}

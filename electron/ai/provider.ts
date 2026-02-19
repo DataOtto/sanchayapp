@@ -31,42 +31,67 @@ export abstract class AIProvider {
 
   // Build the prompt for parsing emails
   protected buildPrompt(from: string, subject: string, body: string): string {
-    return `Analyze this email and determine if it contains financial transaction information.
+    return `You are analyzing an email to extract financial transaction information. READ THE ENTIRE EMAIL CAREFULLY before responding.
 
+=== EMAIL START ===
 FROM: ${from}
 SUBJECT: ${subject}
 BODY: ${body}
+=== EMAIL END ===
 
-If this email contains a financial transaction (bank alert, payment confirmation, receipt, invoice, subscription charge, salary credit, refund, etc.), extract the following information in JSON format:
+TASK: Determine if this email contains a financial transaction and extract details.
 
+IMPORTANT RULES:
+1. READ THE FULL EMAIL BODY - amounts, currency, and transaction type are often in the body, not the subject
+2. Look for specific monetary amounts (e.g., "$49.99", "₹1,500", "Rs. 500", "USD 100")
+3. Determine the CORRECT currency from the email (INR/₹/Rs for Indian Rupee, USD/$ for US Dollar, etc.)
+4. Classify transaction type accurately:
+   - INCOME: salary credited, payment received, refund processed, cashback, interest earned, dividend
+   - EXPENSE: purchase, payment made, subscription charge, bill payment, fee deducted
+   - TRANSFER: money sent to another account, internal transfer
+
+5. For SUBSCRIPTIONS, look for:
+   - Recurring billing mentions ("monthly", "annual", "your subscription")
+   - Service names (Netflix, Spotify, AWS, etc.)
+   - Renewal or charge notifications
+
+RESPONSE FORMAT (JSON only, no other text):
+
+If financial transaction found:
 {
   "isFinancial": true,
   "transaction": {
-    "amount": <number>,
-    "currency": "<USD/EUR/GBP/INR/etc>",
+    "amount": <number without currency symbol>,
+    "currency": "<3-letter code: INR/USD/EUR/GBP/etc>",
     "type": "<income/expense/transfer>",
     "category": "<one of: ${CATEGORIES.join(', ')}>",
-    "merchant": "<merchant/company name if identifiable>",
-    "description": "<brief description of the transaction>",
-    "date": "<YYYY-MM-DD if mentioned, otherwise null>"
+    "merchant": "<company/service name>",
+    "description": "<what the transaction is for>",
+    "date": "<YYYY-MM-DD or null>"
   },
-  "subscription": {
+  "subscription": <include ONLY if this is a recurring subscription charge> {
     "name": "<service name>",
     "amount": <number>,
-    "currency": "<currency code>",
+    "currency": "<3-letter code>",
     "billingCycle": "<monthly/yearly/weekly/quarterly>",
     "category": "<category>"
   }
 }
 
-If this is NOT a financial email (newsletters, promotions, social media, etc.), return:
+If NOT a financial email:
 {"isFinancial": false}
 
-Important:
-- income includes: salary, freelance payments, refunds, cashback, dividends, interest
-- expense includes: purchases, bills, subscriptions, fees
-- transfer includes: money transfers between accounts
-- Only return valid JSON, no explanations or additional text`;
+CATEGORY GUIDELINES:
+- Salary/Freelance: income from work
+- Food & Dining: restaurants, food delivery (Swiggy, Zomato, UberEats)
+- Groceries: grocery stores, supermarkets
+- Shopping: Amazon, Flipkart, retail purchases
+- Subscription: Netflix, Spotify, software subscriptions
+- Cloud Services: AWS, Google Cloud, Azure, Vercel
+- Utilities: electricity, water, gas bills
+- Transport: Uber, Ola, fuel, parking
+- Investment: stocks, mutual funds, crypto
+- Refund/Cashback: money returned`;
   }
 
   // Parse email with AI

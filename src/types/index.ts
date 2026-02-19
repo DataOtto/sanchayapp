@@ -136,7 +136,7 @@ export interface ElectronAPI {
     checkAuth: () => Promise<{ authenticated: boolean; error?: string }>;
     authenticate: () => Promise<{ success: boolean; error?: string }>;
     disconnect: () => Promise<{ success: boolean; error?: string }>;
-    syncEmails: (options?: { fullSync?: boolean }) => Promise<{ success: boolean; processedCount?: number; newTransactions?: number; error?: string }>;
+    syncEmails: (options?: { fullSync?: boolean; daysBack?: number }) => Promise<{ success: boolean; processedCount?: number; newTransactions?: number; error?: string }>;
     getLastSync: () => Promise<string | null>;
     onSyncProgress: (callback: (data: SyncProgress) => void) => () => void;
   };
@@ -152,6 +152,10 @@ export interface ElectronAPI {
     getAll: () => Promise<LogEntry[]>;
     clear: () => Promise<{ success: boolean }>;
     onNewLog: (callback: (entry: LogEntry) => void) => () => void;
+  };
+  settings: {
+    getCurrency: () => Promise<string>;
+    setCurrency: (currency: string) => Promise<{ success: boolean }>;
   };
 }
 

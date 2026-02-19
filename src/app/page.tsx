@@ -25,8 +25,19 @@ export default function Home() {
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [pendingAuthSync, setPendingAuthSync] = useState(false);
   const { theme } = useTheme();
   const t = themes[theme];
+
+  const SYNC_PERIODS = [
+    { label: 'Last 7 days', days: 7 },
+    { label: 'Last 30 days', days: 30 },
+    { label: 'Last 3 months', days: 90 },
+    { label: 'Last 6 months', days: 180 },
+    { label: 'Last year', days: 365 },
+    { label: 'All time', days: 3650 },
+  ];
 
   useEffect(() => {
     const electronAvailable = typeof window !== 'undefined' && window.electronAPI;
@@ -94,7 +105,8 @@ export default function Home() {
       const result = await window.electronAPI.gmail.authenticate();
       if (result.success) {
         setIsConnected(true);
-        handleSync();
+        setPendingAuthSync(true);
+        setShowSyncModal(true);
       }
     } catch (error) {
       console.error('Failed to connect:', error);
@@ -113,12 +125,14 @@ export default function Home() {
     }
   };
 
-  const handleSync = async () => {
+  const handleSyncWithDays = async (daysBack: number) => {
     if (!isElectron || !isConnected) return;
+    setShowSyncModal(false);
+    setPendingAuthSync(false);
     try {
       setIsSyncing(true);
       setSyncProgress(null);
-      const result = await window.electronAPI.gmail.syncEmails();
+      const result = await window.electronAPI.gmail.syncEmails({ daysBack });
       if (result.success) {
         setLastSync(new Date().toISOString());
       }
@@ -128,6 +142,11 @@ export default function Home() {
       setIsSyncing(false);
       setSyncProgress(null);
     }
+  };
+
+  const handleSync = () => {
+    if (!isElectron || !isConnected) return;
+    setShowSyncModal(true);
   };
 
   const renderView = () => {
@@ -272,6 +291,58 @@ export default function Home() {
           {renderView()}
         </div>
       </main>
+
+      {/* Sync Period Modal */}
+      {showSyncModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              setShowSyncModal(false);
+              setPendingAuthSync(false);
+            }}
+          />
+          <div
+            className="relative z-10 w-full max-w-md mx-4 rounded-2xl p-6 shadow-2xl"
+            style={{ background: t.bgCard, border: `1px solid ${t.border}` }}
+          >
+            <h3 className="text-xl font-bold mb-2" style={{ color: t.text }}>
+              Sync Period
+            </h3>
+            <p className="text-sm mb-6" style={{ color: t.textMuted }}>
+              How far back should we sync your emails?
+            </p>
+
+            <div className="space-y-2">
+              {SYNC_PERIODS.map((period) => (
+                <button
+                  key={period.days}
+                  onClick={() => handleSyncWithDays(period.days)}
+                  className="w-full px-4 py-3 rounded-xl text-left font-medium transition-all hover:scale-[1.02]"
+                  style={{
+                    background: t.bgInput,
+                    color: t.text,
+                    border: `1px solid ${t.border}`,
+                  }}
+                >
+                  {period.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                setShowSyncModal(false);
+                setPendingAuthSync(false);
+              }}
+              className="w-full mt-4 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+              style={{ color: t.textMuted }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

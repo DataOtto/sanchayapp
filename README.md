@@ -135,6 +135,6 @@ git checkout -b feature/your-idea
 
 <br />
 
-MIT License · Made by [DataOtto](https://github.com/DataOtto)
+MIT License · Built with love for privacy
 
 </div>
